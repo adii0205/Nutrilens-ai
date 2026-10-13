@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import type { Screen } from "../App";
 import type { AnalyzedProduct, ScanHistoryItem } from "../types";
 import { getHistory, deleteHistoryItem, clearHistory, getUserProfile } from "../services/storageService";
-import { PRODUCTS } from "../data/products";
 
 const filters = ["All", "Grade A", "Grade B", "Grade C/D", "Alerts"];
 
@@ -19,28 +18,7 @@ export default function HistoryScreen({
 
   const loadHistory = () => {
     const saved = getHistory();
-    if (saved.length > 0) {
-      setHistoryItems(saved);
-    } else {
-      // Create initial seed items from sample products
-      const seedProducts = [
-        { name: "Oatly Oat Milk", date: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
-        { name: "Grenade Protein Bar", date: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString() },
-        { name: "Pringles Original", date: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString() },
-        { name: "Alpro Soya Yogurt", date: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString() },
-        { name: "Quaker Oats", date: new Date(Date.now() - 1000 * 60 * 60 * 50).toISOString() },
-      ];
-      const initial: ScanHistoryItem[] = seedProducts.map((sp, idx) => ({
-        id: `seed_${idx}`,
-        product: {
-          ...PRODUCTS[sp.name],
-          id: `seed_prod_${idx}`,
-          analysisMode: "label" as const,
-        },
-        scannedAt: sp.date,
-      }));
-      setHistoryItems(initial);
-    }
+    setHistoryItems(saved);
   };
 
   useEffect(() => {
@@ -236,11 +214,34 @@ export default function HistoryScreen({
             </button>
           );
         })}
-        {filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <p style={{ color: "#5A6472", fontSize: 14 }}>No products found</p>
+        {historyItems.length === 0 ? (
+          <div style={{
+            background: "white", borderRadius: 18, border: "1px dashed #CBD5E0",
+            padding: "36px 16px", textAlign: "center", marginTop: 12,
+          }}>
+            <span style={{ fontSize: 36, display: "block", marginBottom: 10 }}>📋</span>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "#0F1720", margin: "0 0 6px" }}>
+              No scan history yet
+            </p>
+            <p style={{ fontSize: 13, color: "#5A6472", margin: "0 0 16px", lineHeight: 1.4 }}>
+              Scan packaged food labels or Indian meals with your camera to track your real-time nutrition history.
+            </p>
+            <button
+              onClick={() => navigate("scan")}
+              style={{
+                background: "#1B7A43", color: "white", border: "none",
+                borderRadius: 12, padding: "10px 20px", fontSize: 13, fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Start Scanning →
+            </button>
           </div>
-        )}
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <p style={{ color: "#5A6472", fontSize: 14 }}>No products matching filters</p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

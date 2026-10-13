@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import type { Screen } from "../App";
 import type { AnalyzedProduct } from "../types";
 import { getHistoryStats, getAlerts, getHistory, getUserProfile } from "../services/storageService";
-import { PRODUCTS } from "../data/products";
 
 export default function HomeScreen({
   navigate,
@@ -14,7 +13,7 @@ export default function HomeScreen({
   const [stats, setStats] = useState({ totalScans: 0, todayScans: 0, avgScore: 0, gradedScans: 0, alertCount: 0 });
   const [alertsList, setAlertsList] = useState<{ icon: string; label: string; product: string; color: string }[]>([]);
   const [recentItems, setRecentItems] = useState<{ product: AnalyzedProduct; time: string }[]>([]);
-  const [userName, setUserName] = useState("Sarah Chen");
+  const [userName, setUserName] = useState("User");
 
   useEffect(() => {
     const profile = getUserProfile();
@@ -44,17 +43,7 @@ export default function HomeScreen({
       });
       setRecentItems(recents);
     } else {
-      // Fallback sample items
-      const sampleNames = ["Oatly Oat Milk", "Grenade Protein Bar", "Pringles Original"];
-      const fallback = sampleNames.map((name, idx) => ({
-        product: {
-          ...PRODUCTS[name],
-          id: `sample_${idx}`,
-          analysisMode: "label" as const,
-        },
-        time: idx === 0 ? "2h ago" : idx === 1 ? "Yesterday" : "2d ago",
-      }));
-      setRecentItems(fallback);
+      setRecentItems([]);
     }
   }, []);
 
@@ -203,36 +192,32 @@ export default function HomeScreen({
       </div>
 
       {/* Alerts */}
-      <div>
-        <p style={{ fontSize: 11, fontWeight: 600, color: "#5A6472", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-          Alerts
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {(alertsList.length > 0
-            ? alertsList
-            : stats.totalScans === 0 ? [
-                { icon: "⚠️", label: "Peanut allergen detected", product: "Grenade Protein Bar", color: "#E4483C" },
-                { icon: "🔔", label: "High sodium — 680mg/serving", product: "Pringles Original", color: "#F5A623" },
-              ] : []
-          ).map((a, i) => (
-            <div key={i} style={{
-              display: "flex", alignItems: "center", gap: 12,
-              background: "white", borderRadius: 14, padding: "12px 14px",
-              border: "1px solid #E8ECEF",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-            }}>
-              <span style={{ fontSize: 16 }}>{a.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#0F1720", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {a.label}
-                </p>
-                <p style={{ fontSize: 11, color: "#5A6472", margin: 0, marginTop: 1 }}>{a.product}</p>
+      {alertsList.length > 0 && (
+        <div>
+          <p style={{ fontSize: 11, fontWeight: 600, color: "#5A6472", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+            Alerts
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {alertsList.map((a, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                background: "white", borderRadius: 14, padding: "12px 14px",
+                border: "1px solid #E8ECEF",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              }}>
+                <span style={{ fontSize: 16 }}>{a.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "#0F1720", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {a.label}
+                  </p>
+                  <p style={{ fontSize: 11, color: "#5A6472", margin: 0, marginTop: 1 }}>{a.product}</p>
+                </div>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
               </div>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Daily Summary */}
       <div style={{ background: "white", borderRadius: 18, border: "1px solid #E8ECEF", padding: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
@@ -241,14 +226,14 @@ export default function HomeScreen({
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           {[
-            { label: "Scans", value: stats.totalScans === 0 ? "3" : `${stats.todayScans}`, color: "#1B7A43" },
+            { label: "Scans", value: `${stats.todayScans}`, color: "#1B7A43" },
             {
               label: "Avg Score",
-              value: stats.totalScans === 0 ? "58" : stats.gradedScans > 0 ? `${stats.avgScore}` : "—",
-              sub: stats.totalScans === 0 || stats.gradedScans > 0 ? "/100" : undefined,
+              value: stats.gradedScans > 0 ? `${stats.avgScore}` : "—",
+              sub: stats.gradedScans > 0 ? "/100" : undefined,
               color: "#F5A623",
             },
-            { label: "Alerts", value: stats.totalScans === 0 ? "2" : `${stats.alertCount}`, color: "#E4483C" },
+            { label: "Alerts", value: `${stats.alertCount}`, color: "#E4483C" },
           ].map((stat) => (
             <div key={stat.label} style={{ textAlign: "center" }}>
               <p style={{ fontSize: 26, fontWeight: 800, color: stat.color, margin: 0, lineHeight: 1.1 }}>
@@ -267,53 +252,80 @@ export default function HomeScreen({
           <p style={{ fontSize: 11, fontWeight: 600, color: "#5A6472", letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>
             Recent scans
           </p>
-          <button onClick={() => navigate("history")} style={{ fontSize: 12, fontWeight: 700, color: "#1B7A43", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-            See all
-          </button>
+          {recentItems.length > 0 && (
+            <button onClick={() => navigate("history")} style={{ fontSize: 12, fontWeight: 700, color: "#1B7A43", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              See all
+            </button>
+          )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {recentItems.map((item, idx) => {
-            const p = item.product;
-            const isMeal = Boolean(p.mealAnalysis);
-            return (
-              <button
-                key={`${p.name}_${idx}`}
-                onClick={() => handleProductClick(p)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  background: "white", borderRadius: 18, padding: "14px 16px",
-                  border: "1px solid #E8ECEF", cursor: "pointer", textAlign: "left",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                  width: "100%", boxSizing: "border-box",
-                }}
-              >
-                <div style={{
-                  width: 44, height: 44, borderRadius: 12,
-                  background: isMeal ? "#FFF4E0" : p.gradeBg,
-                  color: isMeal ? "#B46A00" : p.gradeColor,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 20, fontWeight: 900, flexShrink: 0,
-                }}>
-                  {isMeal ? "🍛" : p.grade}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: "#0F1720", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {p.name}
-                  </p>
-                  <p style={{ fontSize: 11, color: "#5A6472", margin: 0, marginTop: 2 }}>
-                    {p.brand} · {p.kcal} kcal
-                  </p>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                  <span style={{ fontSize: isMeal ? 12 : 18, fontWeight: 800, color: isMeal ? "#B46A00" : p.gradeColor }}>
-                    {isMeal ? `${Math.round(p.kcal)} kcal` : p.score}
-                  </span>
-                  <span style={{ fontSize: 10, color: "#5A6472" }}>{item.time}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {recentItems.length === 0 ? (
+          <div style={{
+            background: "white", borderRadius: 18, border: "1px dashed #CBD5E0",
+            padding: "24px 16px", textAlign: "center",
+          }}>
+            <span style={{ fontSize: 32, display: "block", marginBottom: 8 }}>🥗</span>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#0F1720", margin: "0 0 4px" }}>
+              No scans yet
+            </p>
+            <p style={{ fontSize: 12, color: "#5A6472", margin: "0 0 14px", lineHeight: 1.4 }}>
+              Scan your first food product or meal to see your live nutrition metrics here.
+            </p>
+            <button
+              onClick={() => navigate("scan")}
+              style={{
+                background: "#1B7A43", color: "white", border: "none",
+                borderRadius: 12, padding: "8px 16px", fontSize: 12, fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Scan Food Now →
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {recentItems.map((item, idx) => {
+              const p = item.product;
+              const isMeal = Boolean(p.mealAnalysis);
+              return (
+                <button
+                  key={`${p.name}_${idx}`}
+                  onClick={() => handleProductClick(p)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    background: "white", borderRadius: 18, padding: "14px 16px",
+                    border: "1px solid #E8ECEF", cursor: "pointer", textAlign: "left",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                    width: "100%", boxSizing: "border-box",
+                  }}
+                >
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: isMeal ? "#FFF4E0" : p.gradeBg,
+                    color: isMeal ? "#B46A00" : p.gradeColor,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, fontWeight: 900, flexShrink: 0,
+                  }}>
+                    {isMeal ? "🍛" : p.grade}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "#0F1720", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {p.name}
+                    </p>
+                    <p style={{ fontSize: 11, color: "#5A6472", margin: 0, marginTop: 2 }}>
+                      {p.brand} · {p.kcal} kcal
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                    <span style={{ fontSize: isMeal ? 12 : 18, fontWeight: 800, color: isMeal ? "#B46A00" : p.gradeColor }}>
+                      {isMeal ? `${Math.round(p.kcal)} kcal` : p.score}
+                    </span>
+                    <span style={{ fontSize: 10, color: "#5A6472" }}>{item.time}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

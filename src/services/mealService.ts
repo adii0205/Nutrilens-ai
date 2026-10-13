@@ -6,6 +6,7 @@ import type {
   MealNutrients,
   Nutrient,
 } from "../types";
+import { getApiKey } from "./storageService";
 
 const ML_API_BASE_URL = (
   import.meta.env.VITE_ML_API_BASE_URL ?? ""
@@ -44,14 +45,18 @@ async function postMealRequest(
 ): Promise<IndianMealAnalysis> {
   let response: Response;
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const key = getApiKey();
+    if (key) headers["x-gemini-api-key"] = key;
+
     response = await fetch(`${ML_API_BASE_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     });
   } catch {
     throw new Error(
-      "The Indian meal service is unavailable. Start the Python backend on port 8000 and try again.",
+      "The Indian meal service is unavailable. Please check your network connection and server status.",
     );
   }
 

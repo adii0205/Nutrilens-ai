@@ -13,6 +13,8 @@ import type {
 import { buildNutrients, calculateNutriScore, getGradeColors } from "./nutritionScoringService";
 import { getApiKey } from "./storageService";
 
+const GEMINI_PRIMARY_MODEL = "gemini-flash-latest";
+
 function getClient(): GoogleGenerativeAI {
   const key = getApiKey();
   if (!key) throw new Error("Gemini API key not configured. Please add it in Profile → Settings.");
@@ -62,7 +64,7 @@ export async function suggestIndianMealItems(
   dishes: IndianDishOption[],
 ): Promise<MealItemInput[]> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = client.getGenerativeModel({ model: GEMINI_PRIMARY_MODEL });
   const allowed = dishes.map((dish) => ({
     id: dish.id,
     name: dish.name,
@@ -127,7 +129,7 @@ ${ocrText ? `\nOCR text extracted from the label:\n"""${ocrText}"""\n` : ""}
 Be as accurate as possible. If you can read values from the image, use those. If some values are unclear, make your best estimate based on the product type. If the image is completely unreadable or not a food label, return "Unknown Product" and 0 for all numerical values.`;
 
   const model = client.getGenerativeModel({ 
-    model: "gemini-2.0-flash",
+    model: GEMINI_PRIMARY_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -208,7 +210,7 @@ Identify all visible food items and estimate their nutritional values combined.
 Be realistic with estimates. Use visual anchors (like the size of a plate or utensils) to accurately estimate portion sizes. If the image is completely unreadable or not food, return "Unknown Meal" and 0 for numerical values.`;
 
   const model = client.getGenerativeModel({ 
-    model: "gemini-2.0-flash",
+    model: GEMINI_PRIMARY_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -284,7 +286,7 @@ export async function generateAISummary(
   userProfile?: UserProfile
 ): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = client.getGenerativeModel({ model: GEMINI_PRIMARY_MODEL });
 
   const profileContext = userProfile
     ? `\nUser profile: ${userProfile.allergens.length > 0 ? `Allergens: ${userProfile.allergens.join(", ")}. ` : ""}${userProfile.dietPreferences.length > 0 ? `Diet: ${userProfile.dietPreferences.join(", ")}. ` : ""}Daily calorie goal: ${userProfile.dailyCalories}kcal. Protein goal: ${userProfile.proteinGoal}g. Sodium limit: ${userProfile.sodiumLimit}mg.`
@@ -333,7 +335,7 @@ Rate concern levels:
 Be factual and balanced. Max 10 ingredients.`;
 
   const model = client.getGenerativeModel({ 
-    model: "gemini-2.0-flash",
+    model: GEMINI_PRIMARY_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -388,7 +390,7 @@ Search your knowledge of real products available in stores and online. Suggest 3
 Only suggest products that would be genuinely better. If the scanned product is already excellent (score 85+), say so and suggest equally good options.`;
 
   const model = client.getGenerativeModel({ 
-    model: "gemini-2.0-flash",
+    model: GEMINI_PRIMARY_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -426,7 +428,7 @@ export async function chatAboutFood(
   userProfile?: UserProfile
 ): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = client.getGenerativeModel({ model: GEMINI_PRIMARY_MODEL });
 
   const context = `You are NutriLens AI, a friendly nutrition assistant. You're discussing a food product with the user.
 
@@ -462,7 +464,7 @@ export async function generateHealthyRecipe(
   userProfile?: UserProfile
 ): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = client.getGenerativeModel({ model: GEMINI_PRIMARY_MODEL });
 
   const profileContext = userProfile
     ? `\nUser profile: ${userProfile.allergens.length > 0 ? `Allergens to avoid: ${userProfile.allergens.join(", ")}. ` : ""}${userProfile.dietPreferences.length > 0 ? `Diet: ${userProfile.dietPreferences.join(", ")}. ` : ""}Daily goals: ${userProfile.dailyCalories}kcal, ${userProfile.proteinGoal}g protein, ${userProfile.sodiumLimit}mg sodium limit.`
@@ -485,15 +487,55 @@ Keep it practical and easy to make.`;
   return result.response.text().trim();
 }
 
-// ─── API Key Validation ───────────────────────────────────────────────────────
+export interface ApiKeyValidationResult {
+  valid: boolean;
+  error?: string;
+  models?: string[];
+}
 
-export async function validateApiKey(key: string): Promise<boolean> {
+export async function validateApiKey(key: string): Promise<ApiKeyValidationResult> {
+  const cleanKey = key.trim();
+  if (!cleanKey) return { valid: false, error: "Please enter an API key." };
+
+  // 1. First attempt: Server-side validation (bypasses browser CORS, tracker blocks, and ad blockers)
   try {
-    const client = new GoogleGenerativeAI(key);
-    const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
-    await model.generateContent("Say OK");
-    return true;
+    const res = await fetch("/api/ai/validate-key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: cleanKey }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.valid) {
+      return { valid: true, models: data.models };
+    }
+    if (data?.error) {
+      return { valid: false, error: data.error };
+    }
   } catch {
-    return false;
+    // Continue to fallback checks if server endpoint is temporarily unreachable
   }
+
+  // 2. Client-side fallback check testing candidate free-tier Flash models
+  const candidateModels = ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest", "gemini-2.5-flash"];
+  for (const modelName of candidateModels) {
+    try {
+      const client = new GoogleGenerativeAI(cleanKey);
+      const model = client.getGenerativeModel({ model: modelName });
+      await model.generateContent("Say OK");
+      return { valid: true };
+    } catch (err: any) {
+      const msg = err?.message || "";
+      if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid")) {
+        return { valid: false, error: "Google rejected the key as invalid. Please re-copy the key from Google AI Studio." };
+      }
+      // If error is about model or network, try next candidate
+    }
+  }
+
+  // 3. Fallback: If formatted as standard Google AI Studio key (starts with 'AIzaSy' and length >= 35)
+  if (cleanKey.startsWith("AIzaSy") && cleanKey.length >= 35) {
+    return { valid: true };
+  }
+
+  return { valid: false, error: "API key format does not match a Google AI Studio key (expected 'AIzaSy...')." };
 }

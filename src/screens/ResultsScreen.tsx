@@ -3,7 +3,7 @@ import type { Screen } from "../App";
 import type { AnalyzedProduct, NutrientRating, ChatMessage, IngredientExplanation, AlternativeProduct } from "../types";
 import { PRODUCTS } from "../data/products";
 import { chatAboutFood, explainIngredients, suggestAlternatives } from "../services/geminiService";
-import { getUserProfile, getApiKey } from "../services/storageService";
+import { getUserProfile, getApiKey, getHistory } from "../services/storageService";
 import { askFoodAI } from "../services/realtimeFoodService";
 import MealAnalysisView from "../components/MealAnalysisView";
 
@@ -67,27 +67,24 @@ export default function ResultsScreen({
   const [alternatives, setAlternatives] = useState<AlternativeProduct[]>(analyzedProduct?.alternatives || []);
   const [alternativesLoading, setAlternativesLoading] = useState(false);
 
-  // Fallback to sample product if no analyzed product
-  const product: AnalyzedProduct = analyzedProduct ?? {
-    ...PRODUCTS["Oatly Oat Milk"],
-    id: "sample",
-    analysisMode: "label" as const,
-  };
+  // Load from latest history scan if not provided directly
+  const latestHistory = getHistory()[0]?.product;
+  const product: AnalyzedProduct | null = analyzedProduct || latestHistory || null;
 
   // Load ingredient explanations when switching to ingredients tab
   useEffect(() => {
-    if (product.analysisMode === "label" && tab === "ingredients" && ingredientExplanations.length === 0 && !ingredientsLoading && product.ingredients && getApiKey()) {
+    if (product && product.analysisMode === "label" && tab === "ingredients" && ingredientExplanations.length === 0 && !ingredientsLoading && product.ingredients && getApiKey()) {
       setIngredientsLoading(true);
       explainIngredients(product.ingredients)
         .then(setIngredientExplanations)
         .catch(() => {})
         .finally(() => setIngredientsLoading(false));
     }
-  }, [tab, ingredientExplanations.length, ingredientsLoading, product.ingredients]);
+  }, [tab, ingredientExplanations.length, ingredientsLoading, product]);
 
   // Load alternatives when switching to AI tab
   useEffect(() => {
-    if (product.analysisMode === "label" && tab === "ai" && alternatives.length === 0 && !alternativesLoading && getApiKey()) {
+    if (product && product.analysisMode === "label" && tab === "ai" && alternatives.length === 0 && !alternativesLoading && getApiKey()) {
       setAlternativesLoading(true);
       const profile = getUserProfile();
       suggestAlternatives(product, profile)
@@ -98,7 +95,7 @@ export default function ResultsScreen({
   }, [tab, alternatives.length, alternativesLoading, product]);
 
   const handleChat = async () => {
-    if (!chatInput.trim() || chatLoading) return;
+    if (!product || !chatInput.trim() || chatLoading) return;
     const query = chatInput.trim();
     setChatInput("");
     setChatMessages((prev) => [...prev, { role: "user", content: query }]);
@@ -111,12 +108,42 @@ export default function ResultsScreen({
         chatHistory: chatMessages,
       });
       setChatMessages((prev) => [...prev, { role: "assistant", content: response }]);
-    } catch {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I could not process your question. Please try again." }]);
+    } catch (err: any) {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: err.message || "Failed to reach AI assistant. Please configure your Gemini API key in Profile settings.",
+        },
+      ]);
     } finally {
       setChatLoading(false);
     }
   };
+
+  if (!product) {
+    return (
+      <div style={{ padding: "40px 20px", textAlign: "center" }}>
+        <span style={{ fontSize: 48, display: "block", marginBottom: 16 }}>🥗</span>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0F1720", margin: "0 0 8px" }}>
+          No Scan Selected
+        </h2>
+        <p style={{ fontSize: 13, color: "#5A6472", margin: "0 0 20px", lineHeight: 1.5 }}>
+          Scan a packaged food product or Indian meal to view comprehensive nutrition insights.
+        </p>
+        <button
+          onClick={() => navigate("scan")}
+          style={{
+            background: "#1B7A43", color: "white", border: "none",
+            borderRadius: 14, padding: "12px 24px", fontSize: 14, fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Scan Food Now →
+        </button>
+      </div>
+    );
+  }
 
   if (product.mealAnalysis) {
     return (

@@ -22,10 +22,10 @@ export default function ProfileScreen({
   navigate: (s: Screen) => void;
   onApiKeyChange?: () => void;
 }) {
-  const [name, setName] = useState("Sarah Chen");
-  const [email, setEmail] = useState("sarah.chen@email.com");
-  const [myAllergens, setMyAllergens] = useState<string[]>(["Peanuts", "Tree nuts"]);
-  const [myDiet, setMyDiet] = useState<string[]>(["Vegetarian"]);
+  const [name, setName] = useState("User");
+  const [email, setEmail] = useState("");
+  const [myAllergens, setMyAllergens] = useState<string[]>([]);
+  const [myDiet, setMyDiet] = useState<string[]>([]);
   const [dailyKcal, setDailyKcal] = useState(2000);
   const [proteinGoal, setProteinGoal] = useState(55);
   const [sodiumLimit, setSodiumLimit] = useState(2300);
@@ -34,33 +34,32 @@ export default function ProfileScreen({
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [keyStatus, setKeyStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
+  const [keyErrorMsg, setKeyErrorMsg] = useState("");
   const [showKeyInput, setShowKeyInput] = useState(false);
 
   // Stats
-  const [stats, setStats] = useState({ totalScans: 47, avgScore: 71, alertCount: 8 });
+  const [stats, setStats] = useState({ totalScans: 0, avgScore: 0, alertCount: 0 });
 
   useEffect(() => {
     const profile = getUserProfile();
-    setName(profile.name || "Sarah Chen");
-    setEmail(profile.email || "sarah.chen@email.com");
-    setMyAllergens(profile.allergens);
-    setMyDiet(profile.dietPreferences);
-    setDailyKcal(profile.dailyCalories);
-    setProteinGoal(profile.proteinGoal);
-    setSodiumLimit(profile.sodiumLimit);
+    setName(profile.name || "User");
+    setEmail(profile.email || "");
+    setMyAllergens(profile.allergens || []);
+    setMyDiet(profile.dietPreferences || []);
+    setDailyKcal(profile.dailyCalories || 2000);
+    setProteinGoal(profile.proteinGoal || 55);
+    setSodiumLimit(profile.sodiumLimit || 2300);
 
     const k = getApiKey();
     setSavedKey(k);
     if (k) setApiKeyInput(k);
 
     const s = getHistoryStats();
-    if (s.totalScans > 0) {
-      setStats({
-        totalScans: s.totalScans,
-        avgScore: s.avgScore,
-        alertCount: s.alertCount,
-      });
-    }
+    setStats({
+      totalScans: s.totalScans,
+      avgScore: s.avgScore,
+      alertCount: s.alertCount,
+    });
   }, []);
 
   const saveProfileChanges = (overrides: Partial<ReturnType<typeof getUserProfile>> = {}) => {
@@ -83,19 +82,31 @@ export default function ProfileScreen({
     saveProfileChanges({ [key]: updated });
   };
 
-  const handleSaveApiKey = async () => {
+  const handleSaveApiKey = async (force = false) => {
     const cleanKey = apiKeyInput.trim();
     if (!cleanKey) {
       clearApiKey();
       setSavedKey(null);
       setKeyStatus("idle");
+      setKeyErrorMsg("");
       onApiKeyChange?.();
       return;
     }
 
+    if (force) {
+      setApiKey(cleanKey);
+      setSavedKey(cleanKey);
+      setKeyStatus("valid");
+      setKeyErrorMsg("");
+      onApiKeyChange?.();
+      setTimeout(() => setShowKeyInput(false), 1200);
+      return;
+    }
+
     setKeyStatus("validating");
-    const isValid = await validateApiKey(cleanKey);
-    if (isValid) {
+    setKeyErrorMsg("");
+    const result = await validateApiKey(cleanKey);
+    if (result.valid) {
       setApiKey(cleanKey);
       setSavedKey(cleanKey);
       setKeyStatus("valid");
@@ -103,6 +114,7 @@ export default function ProfileScreen({
       setTimeout(() => setShowKeyInput(false), 1200);
     } else {
       setKeyStatus("invalid");
+      setKeyErrorMsg(result.error || "Could not verify key with Google AI servers.");
     }
   };
 
@@ -136,7 +148,7 @@ export default function ProfileScreen({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
         {[
           { label: "Scans", value: `${stats.totalScans}`, icon: "📷" },
-          { label: "Avg score", value: `${stats.avgScore}`, icon: "⭐" },
+          { label: "Avg score", value: stats.totalScans > 0 ? `${stats.avgScore}` : "—", icon: "⭐" },
           { label: "Alerts caught", value: `${stats.alertCount}`, icon: "🚨" },
         ].map((s) => (
           <div key={s.label} style={{ ...card, padding: 12, textAlign: "center" }}>
@@ -192,7 +204,7 @@ export default function ProfileScreen({
             />
             <div style={{ display: "flex", gap: 8 }}>
               <button
-                onClick={handleSaveApiKey}
+                onClick={() => handleSaveApiKey(false)}
                 disabled={keyStatus === "validating"}
                 style={{
                   flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 12, fontWeight: 700,
@@ -219,9 +231,30 @@ export default function ProfileScreen({
               )}
             </div>
             {keyStatus === "invalid" && (
-              <p style={{ fontSize: 11, color: "#E4483C", margin: 0 }}>
-                Invalid API key. Get one for free at <a href="https://ai.google.dev" target="_blank" rel="noreferrer" style={{ color: "#E4483C", textDecoration: "underline" }}>ai.google.dev</a>
-              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                <p style={{ fontSize: 11, color: "#E4483C", margin: 0, lineHeight: 1.4 }}>
+                  {keyErrorMsg || "Invalid API key."}
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => handleSaveApiKey(true)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      background: "#1B7A43", color: "white", border: "none", cursor: "pointer",
+                    }}
+                  >
+                    Save & Use Key Anyway →
+                  </button>
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: 11, color: "#5A6472", textDecoration: "underline" }}
+                  >
+                    Get free key at Google AI Studio
+                  </a>
+                </div>
+              </div>
             )}
           </div>
         )}
